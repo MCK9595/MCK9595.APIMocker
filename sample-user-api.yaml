@@ -1,0 +1,256 @@
+openapi: 3.0.0
+info:
+  title: Simple User API
+  description: シンプルなユーザー管理API (api-mockerサンプル)
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:5000
+    description: Mock Server
+
+paths:
+  /users:
+    get:
+      summary: ユーザー一覧取得
+      description: 登録されているユーザーの一覧を取得
+      operationId: getUsers
+      parameters:
+        - name: age
+          in: query
+          description: 年齢でフィルタ
+          schema:
+            type: integer
+        - name: sort
+          in: query
+          description: ソート項目
+          schema:
+            type: string
+            enum: [name, age, createdAt]
+        - name: limit
+          in: query
+          description: 取得件数
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+    
+    post:
+      summary: ユーザー作成
+      description: 新規ユーザーを作成
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{id}:
+    get:
+      summary: ユーザー詳細取得
+      description: 指定IDのユーザー情報を取得
+      operationId: getUserById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ユーザーID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: ユーザーが見つかりません
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    put:
+      summary: ユーザー更新
+      description: ユーザー情報を更新
+      operationId: updateUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: ユーザーが見つかりません
+    
+    delete:
+      summary: ユーザー削除
+      description: ユーザーを削除
+      operationId: deleteUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 削除成功
+        '404':
+          description: ユーザーが見つかりません
+
+components:
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - name
+        - email
+      properties:
+        id:
+          type: integer
+          description: ユーザーID
+          example: 1
+        name:
+          type: string
+          description: ユーザー名
+          example: 田中太郎
+          minLength: 1
+          maxLength: 100
+        email:
+          type: string
+          format: email
+          description: メールアドレス
+          example: tanaka@example.com
+        age:
+          type: integer
+          description: 年齢
+          minimum: 18
+          maximum: 120
+          example: 28
+        phoneNumber:
+          type: string
+          description: 電話番号
+          example: 090-1234-5678
+        address:
+          type: string
+          description: 住所
+          example: 東京都渋谷区
+        status:
+          type: string
+          enum: [active, inactive, pending]
+          description: ステータス
+          example: active
+        createdAt:
+          type: string
+          format: date-time
+          description: 作成日時
+          example: 2025-11-30T10:00:00Z
+        updatedAt:
+          type: string
+          format: date-time
+          description: 更新日時
+          example: 2025-11-30T15:30:00Z
+    
+    UserCreate:
+      type: object
+      required:
+        - name
+        - email
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        age:
+          type: integer
+          minimum: 18
+          maximum: 120
+        phoneNumber:
+          type: string
+        address:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive, pending]
+          default: active
+    
+    UserUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        age:
+          type: integer
+          minimum: 18
+          maximum: 120
+        phoneNumber:
+          type: string
+        address:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive, pending]
+    
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: エラーメッセージ
+        details:
+          type: array
+          description: 詳細エラー情報
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string

@@ -1,0 +1,14 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/MCK9595.APIMocker.Cli/MCK9595.APIMocker.Cli.csproj" />
+    <Project Path="src/MCK9595.APIMocker.Core/MCK9595.APIMocker.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MCK9595.APIMocker.Core.Tests/MCK9595.APIMocker.Core.Tests.csproj" />
+  </Folder>
+</Solution>

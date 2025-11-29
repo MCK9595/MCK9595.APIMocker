@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>mck-api-mocker</ToolCommandName>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Authors>MCK9595</Authors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ConsoleAppFramework" Version="5.7.13" />
+    <PackageReference Include="Spectre.Console" Version="0.49.1" />
+    <PackageReference Include="ZLogger" Version="2.5.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MCK9595.APIMocker.Core\MCK9595.APIMocker.Core.csproj" />
+  </ItemGroup>
+
+</Project>
