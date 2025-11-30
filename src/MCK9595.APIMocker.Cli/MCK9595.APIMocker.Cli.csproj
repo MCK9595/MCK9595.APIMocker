@@ -8,7 +8,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>mck-api-mocker</ToolCommandName>
     <PackageId>MCK9595.APIMocker</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Authors>MCK9595</Authors>
     <Description>OpenAPI定義から自動でモックAPIサーバーを生成するCLIツール。日本語対応ダミーデータ生成、フルCRUD、バリデーション機能を搭載。</Description>
     <PackageProjectUrl>https://github.com/MCK9595/MCK9595.APIMocker</PackageProjectUrl>

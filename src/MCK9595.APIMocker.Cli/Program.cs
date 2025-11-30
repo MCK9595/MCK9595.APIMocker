@@ -1,3 +1,4 @@
+using System.Reflection;
 using ConsoleAppFramework;
 using MCK9595.APIMocker.Core.OpenApi;
 using MCK9595.APIMocker.Core.Server;
@@ -22,6 +23,13 @@ public class Commands
     /// <param name="delayMax">Maximum delay in milliseconds (used with delay-min for random delay)</param>
     /// <param name="errorRate">Probability of returning an error (0.0-1.0)</param>
     /// <param name="errorCodes">Comma-separated list of error codes to return randomly</param>
+    /// <param name="persist">Persist data to JSON files (survives restarts)</param>
+    /// <param name="dataDir">Directory for persisted data files</param>
+    /// <param name="seed">Path to JSON file for initial seed data</param>
+    /// <param name="auth">Authentication mode: bearer, apikey, basic, none</param>
+    /// <param name="authKey">Expected authentication key/credentials</param>
+    /// <param name="responses">Path to custom responses JSON file</param>
+    /// <param name="webhooks">Path to webhooks configuration JSON file</param>
     [Command("serve")]
     public async Task Serve(
         [Argument] string file,
@@ -33,14 +41,29 @@ public class Commands
         int? delayMin = null,
         int? delayMax = null,
         double errorRate = 0.0,
-        string? errorCodes = null)
+        string? errorCodes = null,
+        bool persist = false,
+        string dataDir = "./.mck-data",
+        string? seed = null,
+        string? auth = null,
+        string? authKey = null,
+        string? responses = null,
+        string? webhooks = null)
     {
         // Banner
+        var version = Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
+            ?? "unknown";
+        // Remove +commit hash if present
+        var plusIndex = version.IndexOf('+');
+        if (plusIndex > 0) version = version[..plusIndex];
+
         AnsiConsole.Write(
             new FigletText("API Mocker")
                 .LeftJustified()
                 .Color(Color.Blue));
-        AnsiConsole.MarkupLine("[grey]MCK9595.APIMocker v1.0.0[/]\n");
+        AnsiConsole.MarkupLine($"[grey]MCK9595.APIMocker v{version}[/]\n");
 
         try
         {
@@ -98,27 +121,67 @@ public class Commands
                 DelayMinMs = delayMin,
                 DelayMaxMs = delayMax,
                 ErrorRate = errorRate,
-                ErrorCodes = parsedErrorCodes
+                ErrorCodes = parsedErrorCodes,
+                // Phase 5 options
+                PersistData = persist,
+                DataDirectory = dataDir,
+                SeedFile = seed,
+                AuthMode = auth,
+                AuthKey = authKey,
+                ResponsesFile = responses,
+                WebhooksFile = webhooks
             };
 
-            // Show simulation options if enabled
+            // Show enabled options
+            var hasOptions = false;
+
             if (verbose)
             {
                 AnsiConsole.MarkupLine("[yellow]Verbose logging enabled[/]");
+                hasOptions = true;
             }
             if (delay.HasValue)
             {
                 AnsiConsole.MarkupLine($"[yellow]Fixed delay:[/] {delay}ms");
+                hasOptions = true;
             }
             if (delayMin.HasValue && delayMax.HasValue)
             {
                 AnsiConsole.MarkupLine($"[yellow]Random delay:[/] {delayMin}-{delayMax}ms");
+                hasOptions = true;
             }
             if (errorRate > 0)
             {
                 AnsiConsole.MarkupLine($"[yellow]Error rate:[/] {errorRate:P0} (codes: {string.Join(", ", parsedErrorCodes)})");
+                hasOptions = true;
             }
-            if (verbose || delay.HasValue || (delayMin.HasValue && delayMax.HasValue) || errorRate > 0)
+            if (persist)
+            {
+                AnsiConsole.MarkupLine($"[yellow]Data persistence:[/] {dataDir}");
+                hasOptions = true;
+            }
+            if (!string.IsNullOrEmpty(seed))
+            {
+                AnsiConsole.MarkupLine($"[yellow]Seed data:[/] {seed}");
+                hasOptions = true;
+            }
+            if (!string.IsNullOrEmpty(auth))
+            {
+                var authInfo = authKey != null ? $"{auth} (key set)" : auth;
+                AnsiConsole.MarkupLine($"[yellow]Authentication:[/] {authInfo}");
+                hasOptions = true;
+            }
+            if (!string.IsNullOrEmpty(responses))
+            {
+                AnsiConsole.MarkupLine($"[yellow]Custom responses:[/] {responses}");
+                hasOptions = true;
+            }
+            if (!string.IsNullOrEmpty(webhooks))
+            {
+                AnsiConsole.MarkupLine($"[yellow]Webhooks:[/] {webhooks}");
+                hasOptions = true;
+            }
+            if (hasOptions)
             {
                 AnsiConsole.WriteLine();
             }

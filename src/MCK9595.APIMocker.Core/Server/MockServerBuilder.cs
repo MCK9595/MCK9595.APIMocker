@@ -1,10 +1,13 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using MCK9595.APIMocker.Core.Auth;
 using MCK9595.APIMocker.Core.Generator;
 using MCK9595.APIMocker.Core.OpenApi;
+using MCK9595.APIMocker.Core.Responses;
 using MCK9595.APIMocker.Core.Storage;
 using MCK9595.APIMocker.Core.Validation;
+using MCK9595.APIMocker.Core.Webhooks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -28,6 +31,19 @@ public class MockServerOptions
     public int? DelayMaxMs { get; set; }
     public double ErrorRate { get; set; } = 0.0;
     public int[] ErrorCodes { get; set; } = [500];
+
+    // Phase 5: Data persistence
+    public bool PersistData { get; set; } = false;
+    public string DataDirectory { get; set; } = "./.mck-data";
+    public string? SeedFile { get; set; }
+
+    // Phase 5: Authentication
+    public string? AuthMode { get; set; }
+    public string? AuthKey { get; set; }
+
+    // Phase 5: Custom responses and webhooks
+    public string? ResponsesFile { get; set; }
+    public string? WebhooksFile { get; set; }
 }
 
 public class MockServerBuilder
@@ -37,6 +53,9 @@ public class MockServerBuilder
     private readonly IDataStore _dataStore;
     private readonly IDataGenerator _dataGenerator;
     private readonly IRequestValidator _validator;
+    private readonly IAuthProvider? _authProvider;
+    private readonly IWebhookProvider? _webhookProvider;
+    private readonly CustomResponseProvider? _customResponseProvider;
     private readonly Random _random = new();
 
     public MockServerBuilder(
@@ -44,13 +63,44 @@ public class MockServerBuilder
         MockServerOptions options,
         IDataStore? dataStore = null,
         IDataGenerator? dataGenerator = null,
-        IRequestValidator? validator = null)
+        IRequestValidator? validator = null,
+        IAuthProvider? authProvider = null,
+        IWebhookProvider? webhookProvider = null,
+        CustomResponseProvider? customResponseProvider = null)
     {
         _openApiDoc = openApiDoc;
         _options = options;
-        _dataStore = dataStore ?? new InMemoryDataStore();
+
+        // Data store: use JsonFileDataStore if persistence is enabled
+        if (dataStore != null)
+        {
+            _dataStore = dataStore;
+        }
+        else if (_options.PersistData)
+        {
+            var jsonStore = new JsonFileDataStore(_options.DataDirectory);
+            if (!string.IsNullOrEmpty(_options.SeedFile))
+            {
+                jsonStore.LoadSeedFile(_options.SeedFile);
+            }
+            _dataStore = jsonStore;
+        }
+        else
+        {
+            _dataStore = new InMemoryDataStore();
+        }
+
         _dataGenerator = dataGenerator ?? new DataGenerator();
         _validator = validator ?? new RequestValidator();
+
+        // Auth provider
+        _authProvider = authProvider ?? SimpleAuthProvider.FromOptions(_options.AuthMode, _options.AuthKey);
+
+        // Webhook provider
+        _webhookProvider = webhookProvider ?? SimpleWebhookProvider.FromFile(_options.WebhooksFile, _options.Verbose);
+
+        // Custom response provider
+        _customResponseProvider = customResponseProvider ?? CustomResponseProvider.FromFile(_options.ResponsesFile);
     }
 
     public WebApplication Build()
@@ -75,11 +125,84 @@ public class MockServerBuilder
             {
                 context.Response.Headers.Append("Access-Control-Allow-Origin", "*");
                 context.Response.Headers.Append("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-                context.Response.Headers.Append("Access-Control-Allow-Headers", "Content-Type, Authorization");
+                context.Response.Headers.Append("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key");
 
                 if (context.Request.Method == "OPTIONS")
                 {
                     context.Response.StatusCode = 204;
+                    return;
+                }
+
+                await next();
+            });
+        }
+
+        // Authentication middleware
+        if (_authProvider != null)
+        {
+            app.Use(async (context, next) =>
+            {
+                var headerValue = context.Request.Headers[_authProvider.HeaderName].FirstOrDefault();
+                var result = _authProvider.Validate(headerValue);
+
+                if (!result.IsValid)
+                {
+                    if (_options.Verbose)
+                    {
+                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ← 401 Unauthorized: {result.ErrorMessage}");
+                    }
+                    context.Response.StatusCode = 401;
+                    await context.Response.WriteAsJsonAsync(new { error = "Unauthorized", message = result.ErrorMessage });
+                    return;
+                }
+
+                await next();
+            });
+        }
+
+        // Custom response middleware
+        if (_customResponseProvider != null)
+        {
+            app.Use(async (context, next) =>
+            {
+                // Read request body for matching (if POST/PUT/PATCH)
+                Dictionary<string, object?>? requestBody = null;
+                if (context.Request.ContentLength > 0 &&
+                    (context.Request.Method == "POST" || context.Request.Method == "PUT" || context.Request.Method == "PATCH"))
+                {
+                    context.Request.EnableBuffering();
+                    requestBody = await ReadJsonBody(context.Request, leaveOpen: true);
+                    context.Request.Body.Position = 0;
+                }
+
+                var customResponse = _customResponseProvider.FindMatch(context.Request, requestBody);
+                if (customResponse != null)
+                {
+                    if (_options.Verbose)
+                    {
+                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] → {context.Request.Method} {context.Request.Path} (custom response matched)");
+                    }
+
+                    context.Response.StatusCode = customResponse.Status;
+
+                    // Add custom headers
+                    if (customResponse.Headers != null)
+                    {
+                        foreach (var (key, value) in customResponse.Headers)
+                        {
+                            context.Response.Headers.Append(key, value);
+                        }
+                    }
+
+                    if (customResponse.Body != null)
+                    {
+                        await context.Response.WriteAsJsonAsync(customResponse.Body);
+                    }
+
+                    if (_options.Verbose)
+                    {
+                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ← {customResponse.Status} (custom response)");
+                    }
                     return;
                 }
 
@@ -310,6 +433,13 @@ public class MockServerBuilder
             }
 
             var created = _dataStore.Create(collection, body);
+
+            // Fire webhook
+            if (_webhookProvider != null)
+            {
+                _ = _webhookProvider.FireAsync(WebhookEvents.Created(collection), created);
+            }
+
             return Results.Created($"{path}/{created["id"]}", created);
         });
     }
@@ -343,6 +473,10 @@ public class MockServerBuilder
             }
 
             var updated = _dataStore.Update(collection, id, body);
+            if (updated != null && _webhookProvider != null)
+            {
+                _ = _webhookProvider.FireAsync(WebhookEvents.Updated(collection), updated);
+            }
             return updated != null ? Results.Ok(updated) : Results.NotFound(new { error = "Not found" });
         });
     }
@@ -393,6 +527,10 @@ public class MockServerBuilder
             }
 
             var updated = _dataStore.Update(collection, id, existing);
+            if (updated != null && _webhookProvider != null)
+            {
+                _ = _webhookProvider.FireAsync(WebhookEvents.Updated(collection), updated);
+            }
             return Results.Ok(updated);
         });
     }
@@ -401,7 +539,14 @@ public class MockServerBuilder
     {
         app.MapDelete(path, (string id) =>
         {
+            // Get item before deletion for webhook payload
+            var item = _webhookProvider != null ? _dataStore.GetById(collection, id) : null;
+
             var deleted = _dataStore.Delete(collection, id);
+            if (deleted && _webhookProvider != null && item != null)
+            {
+                _ = _webhookProvider.FireAsync(WebhookEvents.Deleted(collection), item);
+            }
             return deleted ? Results.NoContent() : Results.NotFound(new { error = "Not found" });
         });
     }
@@ -443,11 +588,11 @@ public class MockServerBuilder
         return schema;
     }
 
-    private static async Task<Dictionary<string, object?>?> ReadJsonBody(HttpRequest request)
+    private static async Task<Dictionary<string, object?>?> ReadJsonBody(HttpRequest request, bool leaveOpen = false)
     {
         try
         {
-            using var reader = new StreamReader(request.Body);
+            using var reader = new StreamReader(request.Body, leaveOpen: leaveOpen);
             var json = await reader.ReadToEndAsync();
             return JsonSerializer.Deserialize<Dictionary<string, object?>>(json, new JsonSerializerOptions
             {

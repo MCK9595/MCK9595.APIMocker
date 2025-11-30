@@ -1,0 +1,31 @@
+{
+  "webhooks": [
+    {
+      "description": "ユーザー作成時に通知",
+      "event": "POST:/users",
+      "url": "https://webhook.site/your-webhook-id",
+      "headers": {
+        "X-Webhook-Secret": "your-secret-key"
+      }
+    },
+    {
+      "description": "ユーザー更新時に通知",
+      "event": "PUT:/users/*",
+      "url": "https://webhook.site/your-webhook-id"
+    },
+    {
+      "description": "ユーザー削除時に通知",
+      "event": "DELETE:/users/*",
+      "url": "https://webhook.site/your-webhook-id"
+    },
+    {
+      "description": "全ての注文操作を通知",
+      "event": "*:/orders/*",
+      "url": "https://your-backend.example.com/webhooks/orders",
+      "headers": {
+        "Authorization": "Bearer webhook-token",
+        "Content-Type": "application/json"
+      }
+    }
+  ]
+}

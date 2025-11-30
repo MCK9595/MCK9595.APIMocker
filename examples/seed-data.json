@@ -1,0 +1,48 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "name": "山田太郎",
+      "email": "yamada@example.com",
+      "role": "admin",
+      "status": "active"
+    },
+    {
+      "id": 2,
+      "name": "鈴木花子",
+      "email": "suzuki@example.com",
+      "role": "user",
+      "status": "active"
+    },
+    {
+      "id": 3,
+      "name": "田中一郎",
+      "email": "tanaka@example.com",
+      "role": "user",
+      "status": "inactive"
+    }
+  ],
+  "products": [
+    {
+      "id": 1,
+      "name": "商品A",
+      "price": 1000,
+      "category": "electronics"
+    },
+    {
+      "id": 2,
+      "name": "商品B",
+      "price": 2500,
+      "category": "books"
+    }
+  ],
+  "orders": [
+    {
+      "id": 1,
+      "userId": 1,
+      "productId": 1,
+      "quantity": 2,
+      "status": "pending"
+    }
+  ]
+}
