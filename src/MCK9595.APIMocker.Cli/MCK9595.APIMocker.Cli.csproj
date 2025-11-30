@@ -7,8 +7,17 @@
     <Nullable>enable</Nullable>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>mck-api-mocker</ToolCommandName>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageId>MCK9595.APIMocker</PackageId>
+    <Version>0.1.0</Version>
     <Authors>MCK9595</Authors>
+    <Description>OpenAPI定義から自動でモックAPIサーバーを生成するCLIツール。日本語対応ダミーデータ生成、フルCRUD、バリデーション機能を搭載。</Description>
+    <PackageProjectUrl>https://github.com/MCK9595/MCK9595.APIMocker</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/MCK9595/MCK9595.APIMocker</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>openapi;mock;api;cli;dotnet-tool;swagger;fake-api</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Copyright>Copyright (c) 2025 MCK9595</Copyright>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,6 +28,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MCK9595.APIMocker.Core\MCK9595.APIMocker.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/"/>
   </ItemGroup>
 
 </Project>
