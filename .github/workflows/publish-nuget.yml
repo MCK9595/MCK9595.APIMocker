@@ -8,6 +8,8 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # OIDCトークン発行を有効化（Trusted Publishing用）
 
     steps:
       - uses: actions/checkout@v4
@@ -33,5 +35,9 @@ jobs:
       - name: Pack
         run: dotnet pack src/MCK9595.APIMocker.Cli --configuration Release --no-build --output ./nupkg -p:Version=${{ steps.version.outputs.VERSION }}
 
+      - name: NuGet login (Trusted Publishing)
+        uses: nuget/login@v1
+        id: nuget-login
+
       - name: Push to NuGet
-        run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ steps.nuget-login.outputs.nuget-api-key }} --source https://api.nuget.org/v3/index.json --skip-duplicate
