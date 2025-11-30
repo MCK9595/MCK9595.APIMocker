@@ -1,4 +1,7 @@
 using ConsoleAppFramework;
+using MCK9595.APIMocker.Core.OpenApi;
+using MCK9595.APIMocker.Core.Server;
+using Spectre.Console;
 
 var app = ConsoleApp.Create();
 app.Add<Commands>();
@@ -9,10 +12,170 @@ public class Commands
     /// <summary>
     /// Start mock API server from OpenAPI definition
     /// </summary>
-    /// <param name="input">-i, Path to OpenAPI definition file (yaml/json)</param>
+    /// <param name="file">Path to OpenAPI definition file (yaml/json)</param>
     /// <param name="port">-p, Port number to listen on</param>
-    public void Start(string input, int port = 8080)
+    /// <param name="host">Host address to bind to</param>
+    /// <param name="cors">Enable CORS</param>
+    /// <param name="verbose">-v, Enable verbose request/response logging</param>
+    /// <param name="delay">Add fixed delay in milliseconds to all responses</param>
+    /// <param name="delayMin">Minimum delay in milliseconds (used with delay-max for random delay)</param>
+    /// <param name="delayMax">Maximum delay in milliseconds (used with delay-min for random delay)</param>
+    /// <param name="errorRate">Probability of returning an error (0.0-1.0)</param>
+    /// <param name="errorCodes">Comma-separated list of error codes to return randomly</param>
+    [Command("serve")]
+    public async Task Serve(
+        [Argument] string file,
+        int port = 5000,
+        string host = "localhost",
+        bool cors = true,
+        bool verbose = false,
+        int? delay = null,
+        int? delayMin = null,
+        int? delayMax = null,
+        double errorRate = 0.0,
+        string? errorCodes = null)
     {
-        Console.WriteLine($"Starting mock server from: {input} on port: {port}");
+        // Banner
+        AnsiConsole.Write(
+            new FigletText("API Mocker")
+                .LeftJustified()
+                .Color(Color.Blue));
+        AnsiConsole.MarkupLine("[grey]MCK9595.APIMocker v1.0.0[/]\n");
+
+        try
+        {
+            // Parse OpenAPI file
+            AnsiConsole.MarkupLine($"[blue]Loading:[/] {file}");
+
+            var parser = new OpenApiParser();
+            var openApiDoc = parser.Parse(file);
+
+            AnsiConsole.MarkupLine($"[green]✓[/] Title: {openApiDoc.Title}");
+            AnsiConsole.MarkupLine($"[green]✓[/] Version: {openApiDoc.Version}");
+            AnsiConsole.WriteLine();
+
+            // Endpoints table
+            var table = new Table();
+            table.Border(TableBorder.Rounded);
+            table.AddColumn(new TableColumn("[yellow]Method[/]").Centered());
+            table.AddColumn(new TableColumn("[yellow]Path[/]"));
+            table.AddColumn(new TableColumn("[yellow]Description[/]"));
+
+            foreach (var endpoint in openApiDoc.Endpoints)
+            {
+                var methodColor = endpoint.Method switch
+                {
+                    "GET" => "green",
+                    "POST" => "blue",
+                    "PUT" => "orange1",
+                    "PATCH" => "yellow",
+                    "DELETE" => "red",
+                    _ => "white"
+                };
+
+                table.AddRow(
+                    $"[{methodColor}]{endpoint.Method}[/]",
+                    endpoint.Path,
+                    endpoint.Summary ?? endpoint.Description ?? "-"
+                );
+            }
+
+            AnsiConsole.Write(table);
+            AnsiConsole.WriteLine();
+
+            // Build and start server
+            var parsedErrorCodes = errorCodes?.Split(',')
+                .Select(s => int.TryParse(s.Trim(), out var code) ? code : 500)
+                .ToArray() ?? [500];
+
+            var options = new MockServerOptions
+            {
+                Port = port,
+                Host = host,
+                EnableCors = cors,
+                Verbose = verbose,
+                DelayMs = delay,
+                DelayMinMs = delayMin,
+                DelayMaxMs = delayMax,
+                ErrorRate = errorRate,
+                ErrorCodes = parsedErrorCodes
+            };
+
+            // Show simulation options if enabled
+            if (verbose)
+            {
+                AnsiConsole.MarkupLine("[yellow]Verbose logging enabled[/]");
+            }
+            if (delay.HasValue)
+            {
+                AnsiConsole.MarkupLine($"[yellow]Fixed delay:[/] {delay}ms");
+            }
+            if (delayMin.HasValue && delayMax.HasValue)
+            {
+                AnsiConsole.MarkupLine($"[yellow]Random delay:[/] {delayMin}-{delayMax}ms");
+            }
+            if (errorRate > 0)
+            {
+                AnsiConsole.MarkupLine($"[yellow]Error rate:[/] {errorRate:P0} (codes: {string.Join(", ", parsedErrorCodes)})");
+            }
+            if (verbose || delay.HasValue || (delayMin.HasValue && delayMax.HasValue) || errorRate > 0)
+            {
+                AnsiConsole.WriteLine();
+            }
+
+            var builder = new MockServerBuilder(openApiDoc, options);
+            var webApp = builder.Build();
+
+            AnsiConsole.MarkupLine($"[green]Server running at:[/]");
+            AnsiConsole.MarkupLine($"  [link]http://{host}:{port}[/]");
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[grey]Press Ctrl+C to stop[/]");
+
+            await webApp.RunAsync();
+        }
+        catch (FileNotFoundException ex)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+            Environment.Exit(1);
+        }
+        catch (InvalidOperationException ex)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+            Environment.Exit(1);
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Message}");
+            AnsiConsole.WriteException(ex);
+            Environment.Exit(1);
+        }
+    }
+
+    /// <summary>
+    /// Validate OpenAPI definition file
+    /// </summary>
+    /// <param name="file">Path to OpenAPI definition file</param>
+    [Command("validate")]
+    public void Validate([Argument] string file)
+    {
+        AnsiConsole.MarkupLine($"[blue]Validating:[/] {file}\n");
+
+        try
+        {
+            var parser = new OpenApiParser();
+            var doc = parser.Parse(file);
+
+            AnsiConsole.MarkupLine("[green]✓ Valid OpenAPI specification[/]");
+            AnsiConsole.MarkupLine($"  Title: {doc.Title}");
+            AnsiConsole.MarkupLine($"  Version: {doc.Version}");
+            AnsiConsole.MarkupLine($"  Endpoints: {doc.Endpoints.Count}");
+            AnsiConsole.MarkupLine($"  Schemas: {doc.Schemas.Count}");
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine("[red]✗ Validation failed[/]");
+            AnsiConsole.MarkupLine($"  {ex.Message}");
+            Environment.Exit(1);
+        }
     }
 }
